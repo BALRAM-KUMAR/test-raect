@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import ReactFlow, {
   useNodesState,
   useEdgesState,
@@ -374,54 +374,55 @@ const calculateLayout = (showMidLevel) => {
     const [showOnlyHighlightedEdges, setShowOnlyHighlightedEdges] = useState(false);
   
     useEffect(() => {
-      const updateLayout = () => {
-        const result = calculateLayout(showMidLevel);
-        const newEdges = [];
-  
-        initialData.forEach(task => {
-          task.children.forEach(child => {
-            const isCore = result.sectionMap.get(child.key_value).size > 1;
-            if (showMidLevel || isCore) {
-              const edgeId = `${task.task}-${child.key_value}`;
-              const edgeHidden = showOnlyHighlightedEdges && !highlighted.edges.has(edgeId);
-  
-              newEdges.push({
-                id: edgeId,
-                source: task.task,
-                target: child.key_value,
-                type: 'custom',
-                style: {
-                  stroke: highlighted.edges.has(edgeId) ? '#ff0000' : '#64748b',
-                  strokeWidth: highlighted.edges.has(edgeId) ? 3 : 1.5,
-                },
-                zIndex: isCore ? 1 : 0,
-                hidden: edgeHidden,
-              });
-            }
+        const updateLayout = () => {
+          const result = calculateLayout(showMidLevel);
+          const newEdges = [];
+      
+          initialData.forEach(task => {
+            task.children.forEach(child => {
+              const isCore = result.sectionMap.get(child.key_value).size > 1;
+              if (showMidLevel || isCore) {
+                const edgeId = `${task.task}-${child.key_value}`;
+                // Edges are hidden unless they are highlighted
+                const edgeHidden = !highlighted.edges.has(edgeId);
+      
+                newEdges.push({
+                  id: edgeId,
+                  source: task.task,
+                  target: child.key_value,
+                  type: 'custom',
+                  style: {
+                    stroke: highlighted.edges.has(edgeId) ? '#ff0000' : '#64748b',
+                    strokeWidth: highlighted.edges.has(edgeId) ? 3 : 1.5,
+                  },
+                  zIndex: isCore ? 1 : 0,
+                  hidden: edgeHidden,
+                });
+              }
+            });
           });
-        });
-  
-        const newNodes = result.nodes.map(node => ({
-          ...node,
-          style: {
-            ...node.style,
-            border: highlighted.nodes.has(node.id) ? '2px solid #ff0000' : 'none',
-            boxShadow: highlighted.nodes.has(node.id) ? '0 0 10px rgba(255,0,0,0.5)' : 'none',
-          },
-        }));
-  
-        setNodes(newNodes);
-        setEdges(newEdges);
-        setLayoutData({
-          taskChildrenMap: result.taskChildrenMap,
-          sectionMap: result.sectionMap,
-        });
-      };
-  
-      updateLayout();
-      window.addEventListener('resize', updateLayout);
-      return () => window.removeEventListener('resize', updateLayout);
-    }, [showMidLevel, highlighted, showOnlyHighlightedEdges]);
+      
+          const newNodes = result.nodes.map(node => ({
+            ...node,
+            style: {
+              ...node.style,
+              border: highlighted.nodes.has(node.id) ? '2px solid #ff0000' : 'none',
+              boxShadow: highlighted.nodes.has(node.id) ? '0 0 10px rgba(255,0,0,0.5)' : 'none',
+            },
+          }));
+      
+          setNodes(newNodes);
+          setEdges(newEdges);
+          setLayoutData({
+            taskChildrenMap: result.taskChildrenMap,
+            sectionMap: result.sectionMap,
+          });
+        };
+      
+        updateLayout();
+        window.addEventListener('resize', updateLayout);
+        return () => window.removeEventListener('resize', updateLayout);
+      }, [showMidLevel, highlighted]);
   
     const handleNodeClick = (event, node) => {
       if (node.type === 'task') {
@@ -456,70 +457,43 @@ const calculateLayout = (showMidLevel) => {
       }
     };
   
-    const handleNodeDoubleClick = useCallback((event, node) => {
-        // Find all edges connected to this node
-        const connectedEdges = edges.filter(edge =>
-          edge.source === node.id || edge.target === node.id
-        );
-        const connectedEdgeIds = new Set(connectedEdges.map(edge => edge.id));
-    
-        // Collect connected nodes (sources and targets)
-        const connectedNodeIds = new Set();
-        connectedEdges.forEach(edge => {
-          connectedNodeIds.add(edge.source);
-          connectedNodeIds.add(edge.target);
-        });
-    
-        // Update highlighted state
-        setHighlighted({
-          nodes: connectedNodeIds,
-          edges: connectedEdgeIds,
-        });
-    
-        // Activate edge filtering
-        setShowOnlyHighlightedEdges(true);
-      }, [edges]); // Include 'edges' in the dependency array
-
-  
-    
-      return (
-        <div style={{ width: '100vw', height: '100vh' }}>
-          <ReactFlowProvider>
-            <ReactFlow
-              nodes={nodes}
-              edges={edges}
-              onNodesChange={onNodesChange}
-              onEdgesChange={() => { }}
-              onNodeClick={handleNodeClick}
-              onNodeDoubleClick={handleNodeDoubleClick}
-              fitView
-              fitViewOptions={{ padding: 0.2 }}
-              proOptions={{ hideAttribution: true }}
-              edgeTypes={{ custom: CustomEdge }}
-              nodesDraggable={false}
-              minZoom={0.1}
-              maxZoom={2}
-            >
-              <Background variant="dots" gap={40} size={1} />
-              <Controls>
-                <ControlButton
-                  onClick={() => setShowMidLevel(!showMidLevel)}
-                  title="Toggle Middle Level"
-                >
-                  {showMidLevel ? '◉' : '◎'}
-                </ControlButton>
-                <ControlButton
-                  onClick={() => {
-                    setHighlighted({ nodes: new Set(), edges: new Set() });
-                    setShowOnlyHighlightedEdges(false);
-                  }}
-                  title="Clear Highlights"
-                >
-                  ✕
-                </ControlButton>
-              </Controls>
-            </ReactFlow>
-          </ReactFlowProvider>
-        </div>
-      );
-    }
+    return (
+      <div style={{ width: '100vw', height: '100vh' }}>
+        <ReactFlowProvider>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={() => { }}
+            onNodeClick={handleNodeClick}
+            fitView
+            fitViewOptions={{ padding: 0.2 }}
+            proOptions={{ hideAttribution: true }}
+            edgeTypes={{ custom: CustomEdge }}
+            nodesDraggable={false}
+            minZoom={0.1}
+            maxZoom={2}
+          >
+            <Background variant="dots" gap={40} size={1} />
+            <Controls>
+              <ControlButton
+                onClick={() => setShowMidLevel(!showMidLevel)}
+                title="Toggle Middle Level"
+              >
+                {showMidLevel ? '◉' : '◎'}
+              </ControlButton>
+              <ControlButton
+                onClick={() => {
+                  setHighlighted({ nodes: new Set(), edges: new Set() });
+                  setShowOnlyHighlightedEdges(false);
+                }}
+                title="Clear Highlights"
+              >
+                ✕
+              </ControlButton>
+            </Controls>
+          </ReactFlow>
+        </ReactFlowProvider>
+      </div>
+    );
+  }

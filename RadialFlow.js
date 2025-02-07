@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import ReactFlow, {
   useNodesState,
   useEdgesState,
@@ -365,142 +365,161 @@ const calculateLayout = (showMidLevel) => {
     return { nodes, edges: [], taskChildrenMap, sectionMap };
   };
  
-
-export default function RadialFlow() {
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges] = useEdgesState([]);
-  const [showMidLevel, setShowMidLevel] = useState(false);
-  const [highlighted, setHighlighted] = useState({ nodes: new Set(), edges: new Set() });
-  const [layoutData, setLayoutData] = useState({ taskChildrenMap: new Map(), sectionMap: new Map() });
-  const [showOnlyHighlightedEdges, setShowOnlyHighlightedEdges] = useState(false); // New state
-
-  useEffect(() => {
-    const updateLayout = () => {
-      const result = calculateLayout(showMidLevel);
-      const newEdges = [];
-
-      initialData.forEach(task => {
-        task.children.forEach(child => {
-          const isCore = result.sectionMap.get(child.key_value).size > 1;
-          if (showMidLevel || isCore) {
-            const edgeId = `${task.task}-${child.key_value}`;
-            const edgeHidden = showOnlyHighlightedEdges && !highlighted.edges.has(edgeId); // Set hidden based on state
-
-            newEdges.push({
-              id: edgeId,
-              source: task.task,
-              target: child.key_value,
-              type: 'custom',
-              style: {
-                stroke: highlighted.edges.has(edgeId) ? '#ff0000' : '#64748b',
-                strokeWidth: highlighted.edges.has(edgeId) ? 3 : 1.5,
-              },
-              zIndex: isCore ? 1 : 0,
-              hidden: edgeHidden,
+  export default function RadialFlow() {
+    const [nodes, setNodes, onNodesChange] = useNodesState([]);
+    const [edges, setEdges] = useEdgesState([]);
+    const [showMidLevel, setShowMidLevel] = useState(false);
+    const [highlighted, setHighlighted] = useState({ nodes: new Set(), edges: new Set() });
+    const [layoutData, setLayoutData] = useState({ taskChildrenMap: new Map(), sectionMap: new Map() });
+    const [showOnlyHighlightedEdges, setShowOnlyHighlightedEdges] = useState(false);
+  
+    useEffect(() => {
+      const updateLayout = () => {
+        const result = calculateLayout(showMidLevel);
+        const newEdges = [];
+  
+        initialData.forEach(task => {
+          task.children.forEach(child => {
+            const isCore = result.sectionMap.get(child.key_value).size > 1;
+            if (showMidLevel || isCore) {
+              const edgeId = `${task.task}-${child.key_value}`;
+              const edgeHidden = showOnlyHighlightedEdges && !highlighted.edges.has(edgeId);
+  
+              newEdges.push({
+                id: edgeId,
+                source: task.task,
+                target: child.key_value,
+                type: 'custom',
+                style: {
+                  stroke: highlighted.edges.has(edgeId) ? '#ff0000' : '#64748b',
+                  strokeWidth: highlighted.edges.has(edgeId) ? 3 : 1.5,
+                },
+                zIndex: isCore ? 1 : 0,
+                hidden: edgeHidden,
+              });
+            }
+          });
+        });
+  
+        const newNodes = result.nodes.map(node => ({
+          ...node,
+          style: {
+            ...node.style,
+            border: highlighted.nodes.has(node.id) ? '2px solid #ff0000' : 'none',
+            boxShadow: highlighted.nodes.has(node.id) ? '0 0 10px rgba(255,0,0,0.5)' : 'none',
+          },
+        }));
+  
+        setNodes(newNodes);
+        setEdges(newEdges);
+        setLayoutData({
+          taskChildrenMap: result.taskChildrenMap,
+          sectionMap: result.sectionMap,
+        });
+      };
+  
+      updateLayout();
+      window.addEventListener('resize', updateLayout);
+      return () => window.removeEventListener('resize', updateLayout);
+    }, [showMidLevel, highlighted, showOnlyHighlightedEdges]);
+  
+    const handleNodeClick = (event, node) => {
+      if (node.type === 'task') {
+        const relatedSections = layoutData.taskChildrenMap.get(node.id) || [];
+        const relatedEdges = edges.filter(e => e.source === node.id).map(e => e.id);
+  
+        const connectedTasks = new Set();
+        relatedSections.forEach(section => {
+          if (layoutData.sectionMap.get(section)?.size > 1) {
+            layoutData.sectionMap.get(section).forEach(task => {
+              if (task !== node.id) connectedTasks.add(task);
             });
           }
         });
-      });
-
-      const newNodes = result.nodes.map(node => ({
-        ...node,
-        style: {
-          ...node.style,
-          border: highlighted.nodes.has(node.id) ? '2px solid #ff0000' : 'none',
-          boxShadow: highlighted.nodes.has(node.id) ? '0 0 10px rgba(255,0,0,0.5)' : 'none',
-        },
-        // Nodes remain visible; no hidden property needed
-      }));
-
-      setNodes(newNodes);
-      setEdges(newEdges);
-      setLayoutData({
-        taskChildrenMap: result.taskChildrenMap,
-        sectionMap: result.sectionMap,
-      });
-    };
-
-    updateLayout();
-    window.addEventListener('resize', updateLayout);
-    return () => window.removeEventListener('resize', updateLayout);
-  }, [showMidLevel, highlighted, showOnlyHighlightedEdges]); // Include highlighted and showOnlyHighlightedEdges
-
-  const handleNodeClick = (event, node) => {
-    if (node.type === 'task') {
-      const relatedSections = layoutData.taskChildrenMap.get(node.id) || [];
-      const relatedEdges = edges.filter(e => e.source === node.id).map(e => e.id);
-
-      const connectedTasks = new Set();
-      relatedSections.forEach(section => {
-        if (layoutData.sectionMap.get(section)?.size > 1) {
-          layoutData.sectionMap.get(section).forEach(task => {
-            if (task !== node.id) connectedTasks.add(task);
+  
+        const connectedTaskEdges = [];
+        connectedTasks.forEach(taskId => {
+          edges.forEach(edge => {
+            if (edge.source === taskId && relatedSections.includes(edge.target)) {
+              connectedTaskEdges.push(edge.id);
+            }
           });
-        }
-      });
-
-      // Include edges between connected tasks and sections
-      const connectedTaskEdges = [];
-      connectedTasks.forEach(taskId => {
-        edges.forEach(edge => {
-          if (edge.source === taskId && relatedSections.includes(edge.target)) {
-            connectedTaskEdges.push(edge.id);
-          }
         });
-      });
+  
+        setHighlighted({
+          nodes: new Set([node.id, ...relatedSections, ...connectedTasks]),
+          edges: new Set([
+            ...relatedEdges,
+            ...connectedTaskEdges,
+          ]),
+        });
+      }
+    };
+  
+    const handleNodeDoubleClick = useCallback((event, node) => {
+        // Find all edges connected to this node
+        const connectedEdges = edges.filter(edge =>
+          edge.source === node.id || edge.target === node.id
+        );
+        const connectedEdgeIds = new Set(connectedEdges.map(edge => edge.id));
+    
+        // Collect connected nodes (sources and targets)
+        const connectedNodeIds = new Set();
+        connectedEdges.forEach(edge => {
+          connectedNodeIds.add(edge.source);
+          connectedNodeIds.add(edge.target);
+        });
+    
+        // Update highlighted state
+        setHighlighted({
+          nodes: connectedNodeIds,
+          edges: connectedEdgeIds,
+        });
+    
+        // Activate edge filtering
+        setShowOnlyHighlightedEdges(true);
+      }, [edges]); // Include 'edges' in the dependency array
 
-      setHighlighted({
-        nodes: new Set([node.id, ...relatedSections, ...connectedTasks]),
-        edges: new Set([
-          ...relatedEdges,
-          ...connectedTaskEdges,
-        ]),
-      });
+  
+    
+      return (
+        <div style={{ width: '100vw', height: '100vh' }}>
+          <ReactFlowProvider>
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={() => { }}
+              onNodeClick={handleNodeClick}
+              onNodeDoubleClick={handleNodeDoubleClick}
+              fitView
+              fitViewOptions={{ padding: 0.2 }}
+              proOptions={{ hideAttribution: true }}
+              edgeTypes={{ custom: CustomEdge }}
+              nodesDraggable={false}
+              minZoom={0.1}
+              maxZoom={2}
+            >
+              <Background variant="dots" gap={40} size={1} />
+              <Controls>
+                <ControlButton
+                  onClick={() => setShowMidLevel(!showMidLevel)}
+                  title="Toggle Middle Level"
+                >
+                  {showMidLevel ? '◉' : '◎'}
+                </ControlButton>
+                <ControlButton
+                  onClick={() => {
+                    setHighlighted({ nodes: new Set(), edges: new Set() });
+                    setShowOnlyHighlightedEdges(false);
+                  }}
+                  title="Clear Highlights"
+                >
+                  ✕
+                </ControlButton>
+              </Controls>
+            </ReactFlow>
+          </ReactFlowProvider>
+        </div>
+      );
     }
-  };
-
-  const handleNodeDoubleClick = (event, node) => {
-    setShowOnlyHighlightedEdges(!showOnlyHighlightedEdges);
-  };
-
-  return (
-    <div style={{ width: '100vw', height: '100vh' }}>
-      <ReactFlowProvider>
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={() => { }} // No need to handle edge changes separately
-          onNodeClick={handleNodeClick}
-          onNodeDoubleClick={handleNodeDoubleClick}
-          fitView
-          fitViewOptions={{ padding: 0.2 }}
-          proOptions={{ hideAttribution: true }}
-          edgeTypes={{ custom: CustomEdge }}
-          nodesDraggable={false}
-          minZoom={0.1}
-          maxZoom={2}
-        >
-          <Background variant="dots" gap={40} size={1} />
-          <Controls>
-            <ControlButton
-              onClick={() => setShowMidLevel(!showMidLevel)}
-              title="Toggle Middle Level"
-            >
-              {showMidLevel ? '◉' : '◎'}
-            </ControlButton>
-            <ControlButton
-              onClick={() => {
-                setHighlighted({ nodes: new Set(), edges: new Set() });
-                setShowOnlyHighlightedEdges(false); // Reset edge visibility
-              }}
-              title="Clear Highlights"
-            >
-              ✕
-            </ControlButton>
-          </Controls>
-        </ReactFlow>
-      </ReactFlowProvider>
-    </div>
-  );
-}

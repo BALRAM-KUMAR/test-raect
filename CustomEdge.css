@@ -1,0 +1,16 @@
+/* src/components/CustomEdge.css */
+.custom-edge-path {
+    stroke: #64748b; /* Default edge color */
+    stroke-width: 2;
+    fill: none;
+  }
+  
+  .custom-edge-animation {
+    animation: dash 2s linear infinite;
+  }
+  
+  @keyframes dash {
+    to {
+      stroke-dashoffset: -10;
+    }
+  }
